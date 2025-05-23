@@ -6,7 +6,7 @@ const router = require('./routes/index');
 const cookiesParser = require('cookie-parser');
 const { app, server } = require('./socket/index');
 
-// ✅ Define allowedOrigin before using it
+// ✅ FRONTEND URL from .env
 const allowedOrigin = process.env.FRONTEND_URL;
 
 app.use(cors({
@@ -21,15 +21,14 @@ app.use(cookiesParser());
 
 const PORT = process.env.PORT || 8080;
 
-// ✅ Root test route
 app.get('/', (req, res) => {
     res.json({ message: "Server running at " + PORT });
 });
 
-// ✅ All API routes
+// ✅ API routes
 app.use('/api', router);
 
-// ✅ Connect to DB and start the server
+// ✅ Connect DB and start server
 connectDB().then(() => {
     server.listen(PORT, () => {
         console.log("🚀 Server running at", PORT);

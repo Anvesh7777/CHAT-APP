@@ -1,17 +1,18 @@
-const express = require('express');
 const { Server } = require('socket.io');
 const http = require('http');
+const express = require('express');
+require('dotenv').config();
+
 const getUserDetailsFromToken = require('../helpers/getUserDetailsFromToken');
 const UserModel = require('../models/UserModel');
 const { ConversationModel, MessageModel } = require('../models/ConversationModel');
 const getConversation = require('../helpers/getConversation');
 
+// Create new express app instance only for socket server
 const app = express();
-
-// Create HTTP server
 const server = http.createServer(app);
 
-// Setup Socket.IO server
+// Initialize socket.io with CORS settings
 const io = new Server(server, {
   cors: {
     origin: process.env.FRONTEND_URL,
@@ -39,21 +40,18 @@ io.on('connection', async (socket) => {
 
     io.emit('onlineUser', Array.from(onlineUsers));
 
-    // Message page request
     socket.on('message-page', async (targetUserId) => {
       try {
         const targetUser = await UserModel.findById(targetUserId).select('-password');
         if (!targetUser) return;
 
-        const payload = {
+        socket.emit('message-user', {
           _id: targetUser._id,
           name: targetUser.name,
           email: targetUser.email,
           profile_pic: targetUser.profile_pic,
           online: onlineUsers.has(targetUserId),
-        };
-
-        socket.emit('message-user', payload);
+        });
 
         const conversation = await ConversationModel.findOne({
           $or: [
@@ -68,7 +66,6 @@ io.on('connection', async (socket) => {
       }
     });
 
-    // New message handler
     socket.on('new message', async (data) => {
       try {
         let conversation = await ConversationModel.findOne({
@@ -97,11 +94,8 @@ io.on('connection', async (socket) => {
         });
 
         const updatedConversation = await ConversationModel.findOne({
-          $or: [
-            { sender: data.sender, receiver: data.receiver },
-            { sender: data.receiver, receiver: data.sender },
-          ],
-        }).populate('messages').sort({ updatedAt: -1 });
+          _id: conversation._id,
+        }).populate('messages');
 
         io.to(data.sender).emit('message', updatedConversation?.messages || []);
         io.to(data.receiver).emit('message', updatedConversation?.messages || []);
@@ -116,7 +110,6 @@ io.on('connection', async (socket) => {
       }
     });
 
-    // Sidebar request
     socket.on('sidebar', async (currentUserId) => {
       try {
         const conversations = await getConversation(currentUserId);
@@ -126,7 +119,6 @@ io.on('connection', async (socket) => {
       }
     });
 
-    // Mark messages as seen
     socket.on('seen', async (msgByUserId) => {
       try {
         const conversation = await ConversationModel.findOne({
@@ -156,7 +148,6 @@ io.on('connection', async (socket) => {
       }
     });
 
-    // Handle disconnect
     socket.on('disconnect', () => {
       onlineUsers.delete(userIdStr);
       console.log("User disconnected:", socket.id);
@@ -169,6 +160,5 @@ io.on('connection', async (socket) => {
 });
 
 module.exports = {
-  app,
-  server,
+  server, // ✅ Only export server
 };
