@@ -1,33 +1,37 @@
-const express = require('express')
-const cors = require('cors')
-require('dotenv').config()
-const connectDB = require('./config/connectDB')
-const router = require('./routes/index')
-const cookiesParser = require('cookie-parser')
-const { app, server } = require('./socket/index')
+const express = require('express');
+const cors = require('cors');
+require('dotenv').config();
+const connectDB = require('./config/connectDB');
+const router = require('./routes/index');
+const cookiesParser = require('cookie-parser');
+const { app, server } = require('./socket/index');
 
-// const app = express()
+// ✅ Define allowedOrigin before using it
+const allowedOrigin = process.env.FRONTEND_URL;
+
 app.use(cors({
-    origin : process.env.FRONTEND_URL,
-    credentials : true
-}))
-console.log("CORS allowed origin:", allowedOrigin);
-app.use(express.json())
-app.use(cookiesParser())
+    origin: allowedOrigin,
+    credentials: true
+}));
 
-const PORT = process.env.PORT || 8080
+console.log("✅ CORS allowed origin:", allowedOrigin);
 
-app.get('/',(request,response)=>{
-    response.json({
-        message : "Server running at " + PORT
-    })
-})
+app.use(express.json());
+app.use(cookiesParser());
 
-//api endpoints
-app.use('/api',router)
+const PORT = process.env.PORT || 8080;
 
-connectDB().then(()=>{
-    server.listen(PORT,()=>{
-        console.log("server running at " + PORT)
-    })
-})
+// ✅ Root test route
+app.get('/', (req, res) => {
+    res.json({ message: "Server running at " + PORT });
+});
+
+// ✅ All API routes
+app.use('/api', router);
+
+// ✅ Connect to DB and start the server
+connectDB().then(() => {
+    server.listen(PORT, () => {
+        console.log("🚀 Server running at", PORT);
+    });
+});
