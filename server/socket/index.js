@@ -1,7 +1,9 @@
+const express = require('express');
 const { Server } = require('socket.io');
 const http = require('http');
-const express = require('express');
-require('dotenv').config();
+const dotenv = require('dotenv');
+
+dotenv.config(); // ✅ Load .env early
 
 const getUserDetailsFromToken = require('../helpers/getUserDetailsFromToken');
 const UserModel = require('../models/UserModel');
@@ -11,9 +13,13 @@ const getConversation = require('../helpers/getConversation');
 const app = express();
 const server = http.createServer(app);
 
+// ✅ Hardcoded or env based
+const allowedOrigin = process.env.FRONTEND_URL || "https://chat-app-eight-eta-57.vercel.app";
+
+// ✅ Initialize socket.io with correct CORS
 const io = new Server(server, {
   cors: {
-    origin: process.env.FRONTEND_URL,
+    origin: allowedOrigin,
     credentials: true,
   },
 });
@@ -26,10 +32,7 @@ io.on('connection', async (socket) => {
   try {
     const token = socket.handshake.auth.token;
     const user = await getUserDetailsFromToken(token);
-
-    if (!user || !user._id) {
-      return socket.disconnect();
-    }
+    if (!user || !user._id) return socket.disconnect();
 
     const userIdStr = user._id.toString();
     socket.join(userIdStr);
@@ -41,13 +44,15 @@ io.on('connection', async (socket) => {
       const targetUser = await UserModel.findById(targetUserId).select('-password');
       if (!targetUser) return;
 
-      socket.emit('message-user', {
+      const payload = {
         _id: targetUser._id,
         name: targetUser.name,
         email: targetUser.email,
         profile_pic: targetUser.profile_pic,
         online: onlineUsers.has(targetUserId),
-      });
+      };
+
+      socket.emit('message-user', payload);
 
       const conversation = await ConversationModel.findOne({
         $or: [
@@ -86,8 +91,11 @@ io.on('connection', async (socket) => {
       });
 
       const updatedConversation = await ConversationModel.findOne({
-        _id: conversation._id,
-      }).populate('messages');
+        $or: [
+          { sender: data.sender, receiver: data.receiver },
+          { sender: data.receiver, receiver: data.sender },
+        ],
+      }).populate('messages').sort({ updatedAt: -1 });
 
       io.to(data.sender).emit('message', updatedConversation?.messages || []);
       io.to(data.receiver).emit('message', updatedConversation?.messages || []);
@@ -131,7 +139,6 @@ io.on('connection', async (socket) => {
 
     socket.on('disconnect', () => {
       onlineUsers.delete(userIdStr);
-      console.log("User disconnected:", socket.id);
       io.emit('onlineUser', Array.from(onlineUsers));
     });
   } catch (err) {
@@ -140,7 +147,6 @@ io.on('connection', async (socket) => {
   }
 });
 
-// ✅ Export both app and server
 module.exports = {
   app,
   server,
