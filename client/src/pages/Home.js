@@ -17,6 +17,7 @@ const Home = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
+  // ✅ Fetch user details from backend
   const fetchUserDetails = async () => {
     try {
       const URL = `${process.env.REACT_APP_BACKEND_URL}/api/user-details`;
@@ -32,34 +33,42 @@ const Home = () => {
         navigate('/email');
       }
 
-      console.log('current user Details', response.data.data);
+      console.log('✅ User Details:', response.data.data);
     } catch (error) {
-      console.log('error', error);
+      console.error('❌ Error fetching user details:', error);
     }
   };
 
+  // ✅ On component mount, get user info
   useEffect(() => {
     fetchUserDetails();
   }, []);
 
-  /*** ✅ socket connection ***/
+  // ✅ Setup socket.io connection
   useEffect(() => {
     const socketConnection = io(process.env.REACT_APP_BACKEND_URL, {
       auth: {
         token: localStorage.getItem('token'),
       },
       transports: ['websocket'],
-      secure: true,
       withCredentials: true,
     });
 
+    // 🔌 Listen for online users
     socketConnection.on('onlineUser', (data) => {
-      console.log('Online Users:', data);
+      console.log('🟢 Online Users:', data);
       dispatch(setOnlineUser(data));
     });
 
+    // ❗Debugging Socket Errors
+    socketConnection.on('connect_error', (err) => {
+      console.error('❌ Socket Connection Error:', err.message);
+    });
+
+    // ✅ Store socket in Redux
     dispatch(setSocketConnection(socketConnection));
 
+    // 🧹 Clean up on unmount
     return () => {
       socketConnection.disconnect();
     };
@@ -69,16 +78,17 @@ const Home = () => {
 
   return (
     <div className="grid lg:grid-cols-[300px,1fr] h-screen max-h-screen">
+      {/* ✅ Sidebar only on homepage */}
       <section className={`bg-white ${!basePath && 'hidden'} lg:block`}>
         <Sidebar />
       </section>
 
-      {/* Message section */}
+      {/* ✅ Message window */}
       <section className={`${basePath && 'hidden'}`}>
         <Outlet />
       </section>
 
-      {/* Welcome placeholder */}
+      {/* ✅ Empty state on first load */}
       <div
         className={`justify-center items-center flex-col gap-2 hidden ${
           !basePath ? 'hidden' : 'lg:flex'
