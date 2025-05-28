@@ -3,7 +3,7 @@ const { Server } = require('socket.io');
 const http = require('http');
 const dotenv = require('dotenv');
 
-dotenv.config(); // ✅ Load .env early
+dotenv.config(); // ✅ Load env vars
 
 const getUserDetailsFromToken = require('../helpers/getUserDetailsFromToken');
 const UserModel = require('../models/UserModel');
@@ -13,32 +13,45 @@ const getConversation = require('../helpers/getConversation');
 const app = express();
 const server = http.createServer(app);
 
-// ✅ Hardcoded or env based
+// ✅ Set allowed frontend origin
 const allowedOrigin = process.env.FRONTEND_URL || "https://chat-app-eight-eta-57.vercel.app";
 
-// ✅ Initialize socket.io with correct CORS
+// ✅ Initialize Socket.IO with production-safe CORS & compatibility
 const io = new Server(server, {
   cors: {
     origin: allowedOrigin,
     credentials: true,
+    methods: ["GET", "POST"],
   },
+  allowEIO3: true, // ✅ For older client compatibility
 });
 
 const onlineUsers = new Set();
 
 io.on('connection', async (socket) => {
-  console.log("User connected:", socket.id);
+  console.log("🔌 New client connected:", socket.id);
 
   try {
     const token = socket.handshake.auth.token;
+
+    if (!token) {
+      console.warn("⚠️ No token provided");
+      return socket.disconnect();
+    }
+
     const user = await getUserDetailsFromToken(token);
-    if (!user || !user._id) return socket.disconnect();
+    if (!user || !user._id) {
+      console.warn("❌ Invalid user token");
+      return socket.disconnect();
+    }
 
     const userIdStr = user._id.toString();
     socket.join(userIdStr);
     onlineUsers.add(userIdStr);
 
     io.emit('onlineUser', Array.from(onlineUsers));
+
+    /** ------------------------ LISTENERS ------------------------ **/
 
     socket.on('message-page', async (targetUserId) => {
       const targetUser = await UserModel.findById(targetUserId).select('-password');
@@ -59,7 +72,7 @@ io.on('connection', async (socket) => {
           { sender: user._id, receiver: targetUserId },
           { sender: targetUserId, receiver: user._id },
         ],
-      }).populate('messages').sort({ updatedAt: -1 });
+      }).populate('messages');
 
       socket.emit('message', conversation?.messages || []);
     });
@@ -91,11 +104,8 @@ io.on('connection', async (socket) => {
       });
 
       const updatedConversation = await ConversationModel.findOne({
-        $or: [
-          { sender: data.sender, receiver: data.receiver },
-          { sender: data.receiver, receiver: data.sender },
-        ],
-      }).populate('messages').sort({ updatedAt: -1 });
+        _id: conversation._id,
+      }).populate('messages');
 
       io.to(data.sender).emit('message', updatedConversation?.messages || []);
       io.to(data.receiver).emit('message', updatedConversation?.messages || []);
@@ -140,9 +150,11 @@ io.on('connection', async (socket) => {
     socket.on('disconnect', () => {
       onlineUsers.delete(userIdStr);
       io.emit('onlineUser', Array.from(onlineUsers));
+      console.log("❌ Disconnected:", userIdStr);
     });
+
   } catch (err) {
-    console.error("Socket connection error:", err);
+    console.error("🔥 Socket error:", err.message || err);
     socket.disconnect();
   }
 });

@@ -46,13 +46,16 @@ const Home = () => {
 
   // ✅ Setup socket.io connection
   useEffect(() => {
+   
+
     const socketConnection = io(process.env.REACT_APP_BACKEND_URL, {
       auth: {
         token: localStorage.getItem('token'),
       },
-      transports: ['websocket'],
       withCredentials: true,
+      transports: ['polling', 'websocket'],  // ✅ Enable fallback
     });
+    
 
     // 🔌 Listen for online users
     socketConnection.on('onlineUser', (data) => {
